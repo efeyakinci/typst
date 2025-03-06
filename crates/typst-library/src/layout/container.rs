@@ -1,7 +1,9 @@
+use ecow::EcoString;
+
 use crate::diag::{bail, SourceResult};
 use crate::engine::Engine;
 use crate::foundations::{
-    cast, elem, Args, AutoValue, Construct, Content, NativeElement, Packed, Smart,
+    cast, elem, Args, AutoValue, Construct, Content, NativeElement, Packed, Repr, Smart,
     StyleChain, Value,
 };
 use crate::introspection::Locator;
@@ -179,6 +181,53 @@ pub enum InlineItem {
     Frame(Frame),
 }
 
+/// Defines how a block sticks to adjacent content.
+#[derive(Debug, Default, Copy, Clone, Eq, PartialEq, Hash)]
+pub enum Sticky {
+    /// Block sticks to the content below it.
+    Below,
+    /// Makes the block above stick to this block.
+    Above,
+    /// Makes the block above and below stick to this block.
+    Both,
+    /// No stickiness.
+    #[default]
+    None,
+}
+
+impl Repr for Sticky {
+    fn repr(&self) -> EcoString {
+        match self {
+            Self::Below => "below".into(),
+            Self::Above => "above".into(),
+            Self::Both => "both".into(),
+            Self::None => "none".into(),
+        }
+    }
+}
+
+cast! {
+    Sticky,
+    self => self.repr().into_value(),
+    s: EcoString => match s.as_str() {
+        "below" => Self::Below,
+        "above" => Self::Above,
+        "both" => Self::Both,
+        "none" => Self::None,
+        _ => bail!("invalid sticky value"),
+    },
+}
+
+impl Sticky {
+    pub fn is_sticky_above(self) -> bool {
+        matches!(self, Self::Above | Self::Both)
+    }
+
+    pub fn is_sticky_below(self) -> bool {
+        matches!(self, Self::Below | Self::Both)
+    }
+}
+
 /// A block-level container.
 ///
 /// Such a container can be used to separate content, size it, and give it a
@@ -338,23 +387,28 @@ pub struct BlockElem {
     #[default(false)]
     pub clip: bool,
 
-    /// Whether this block must stick to the following one, with no break in
-    /// between.
+    /// If and how this block must stick to the blocks surrounding it, with no
+    /// break in between.
     ///
-    /// This is, by default, set on heading blocks to prevent orphaned headings
-    /// at the bottom of the page.
+    /// This is, by default, set to "below" on heading blocks to prevent
+    /// orphaned headings at the bottom of the page.
     ///
     /// ```example
     /// >>> #set page(height: 140pt)
     /// // Disable stickiness of headings.
-    /// #show heading: set block(sticky: false)
+    /// #show heading: set block(sticky: "none")
     /// #lorem(20)
     ///
     /// = Chapter
     /// #lorem(10)
+    /// // Make lists stick to blocks above them
+    /// #show list: set block(sticky: "above")
+    /// #lorem(10)
+    /// - Item 1
+    /// - Item 2
     /// ```
-    #[default(false)]
-    pub sticky: bool,
+    #[default(Sticky::None)]
+    pub sticky: Sticky,
 
     /// The contents of the block.
     #[positional]

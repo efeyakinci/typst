@@ -324,7 +324,7 @@ impl<'a, 'b> Work<'a, 'b> {
     fn head(&self) -> Option<&'b Child<'a>> {
         self.children.first()
     }
-
+    
     /// Mark the `head()` child as processed, advancing the slice by one.
     fn advance(&mut self) {
         self.children = &self.children[1..];
